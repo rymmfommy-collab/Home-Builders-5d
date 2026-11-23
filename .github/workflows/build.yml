@@ -1,0 +1,58 @@
+name: Build APK
+on:
+  workflow_dispatch:
+  push:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Create Capacitor project
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+          npm init -y
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          npx cap init "Home Studio 5D" com.homestudio.fived --web-dir www
+          npx cap add android
+      - name: Make app icon
+        run: |
+          python3 - <<'PY'
+          import zlib,struct
+          n=192
+          rows=[]
+          for y in range(n):
+              r=bytearray([0])
+              for x in range(n):
+                  u,v=x/n,y/n
+                  c=(26,31,39)
+                  if .12<u<.88 and .12<v<.88: c=(77,163,255)
+                  if .30<u<.70 and .50<v<.74: c=(240,244,248)
+                  if .22<u<.78 and .24<v<.50 and abs(u-.5)<=(v-.24)*(.28/.26): c=(240,244,248)
+                  if .46<u<.54 and .58<v<.74: c=(77,163,255)
+                  r+=bytes(c)
+              rows.append(bytes(r))
+          def ch(t,d):
+              b=t+d
+              return struct.pack('>I',len(d))+b+struct.pack('>I',zlib.crc32(b)&0xffffffff)
+          open('icon.png','wb').write(b'\x89PNG\r\n\x1a\n'+ch(b'IHDR',struct.pack('>IIBBBBB',n,n,8,2,0,0,0))+ch(b'IDAT',zlib.compress(b''.join(rows),9))+ch(b'IEND',b''))
+          PY
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          find android/app/src/main/res -name 'ic_launcher*.png' -exec cp icon.png {} \;
+      - name: Build APK
+        run: |
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HomeStudio5D-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
