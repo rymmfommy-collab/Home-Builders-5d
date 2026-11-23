@@ -647,7 +647,18 @@ function updPhase(){
   $('#phl').textContent=phase+'/4 '+PH[phase-1].n+' · day '+row.end+' of '+C.days+' · '+money(row.cum);
 }
 $('#ph').oninput=e=>{phase=+e.target.value;updPhase();draw();};
-function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
+async function download(blob,name){
+  const C=window.Capacitor,P=C&&C.Plugins;
+  if(C&&C.isNativePlatform&&C.isNativePlatform()&&P&&P.Filesystem&&P.Share){
+    try{
+      const data=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]);r.onerror=rej;r.readAsDataURL(blob);});
+      const f=await P.Filesystem.writeFile({path:name,data,directory:'CACHE'});
+      await P.Share.share({title:name,url:f.uri,dialogTitle:'Save or share '+name});
+      return;
+    }catch(e){if(e&&/cancel/i.test(String(e.message||e)))return;alert('Export failed: '+(e&&e.message||e));return;}
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+}
 $('#bUndo').onclick=undo;
 $('#bSave').onclick=()=>download(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}),'home-design.json');
 $('#bLoad').onclick=()=>$('#file').click();
